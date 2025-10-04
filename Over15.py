@@ -51,7 +51,7 @@ def check_password():
     password = st.text_input(
         "पासवर्ड डालें", type="password", 
         key="password_input", 
-        placeholder="sgam@4321"
+        placeholder=""
     )
 
     if st.button("लॉगिन"):
