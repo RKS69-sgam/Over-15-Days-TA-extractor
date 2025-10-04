@@ -123,14 +123,14 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, d
     
     # Base structure
     official_note_base = f"""प0म0रे0 															कार्यालय
-सरईग्रा/स्‍टॉफ - IV/TA													     वरिष्‍ठ खण्‍ड अभियंता (रेल पथ)
+सरईग्राम/स्‍टॉफ - IV/TA													 वरिष्‍ठ खण्‍ड अभियंता (रेल पथ)
 दिनांक/{current_date}														सरईग्राम
 
 प्रति,
 	वरिष्‍ठ मण्‍डल (वित्त प्रबंधक) 
 	पमरे जबलपुर
 
-द्वारा :- 	उचित माध्‍यम 
+द्वारा :-	उचित माध्‍यम 
 """
     
     # Dynamic Subject Line
@@ -143,7 +143,7 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, d
     subject_line = f"विषय:- 	{month_year_text} की वेतन में लगने वाला {subject_detail} पर प्रतिहस्‍ताक्षर एवं भुगतान की कार्यवाही बावत ।"
     
     # Body
-    official_note_body = f"""उपरोक्‍त विषयानुसार इस डिपो के अधीन पदस्‍थ कर्मचारियों का माह {current_month_hindi} {current_year} के वेतन पत्रक में लगने वाला यात्रा भत्ता की सूची कर्मचारीवार निम्‍नानुसार तैयार कर प्रतिहस्‍ताक्षर एवं भुगतान की अग्रिम कार्यवाही हेतु 
+    official_note_body = f"""      उपरोक्‍त विषयानुसार इस डिपो के अधीन पदस्‍थ कर्मचारियों का माह {current_month_hindi} {current_year} के वेतन पत्रक में लगने वाला यात्रा भत्ता की सूची कर्मचारीवार निम्‍नानुसार तैयार कर प्रतिहस्‍ताक्षर एवं भुगतान की अग्रिम कार्यवाही हेतु 
 यात्रा भत्ता संलग्‍न सादर प्रेषित है ।
 """
     
