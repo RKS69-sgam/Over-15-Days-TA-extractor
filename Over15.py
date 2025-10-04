@@ -2,12 +2,50 @@ import streamlit as st
 import re
 import pandas as pd
 from io import StringIO
+from datetime import datetime
+import locale
+
+# सिस्टम की लोकल सेटिंग को हिंदी/भारतीय प्रारूप पर सेट करें
+try:
+    locale.setlocale(locale.LC_TIME, 'hi_IN.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_TIME, 'en_IN.UTF-8') #Fallback to Indian English if Hindi locale fails
+    except:
+        locale.setlocale(locale.LC_TIME, 'C') #Fallback to C locale
 
 # --- पासवर्ड और कॉन्फ़िगरेशन ---
 try:
     CORRECT_PASSWORD = st.secrets["app_password"]
 except:
     CORRECT_PASSWORD = "sgam@4321"
+
+# --- डेट और मंथ फ़ॉर्मेटिंग ---
+
+# वर्तमान तिथि को D.M.YYYY फॉर्मेट में प्राप्त करें (उदा: 04.10.2025)
+CURRENT_DATE_FORMATTED = datetime.now().strftime("%d.%m.%Y")
+
+# वर्तमान माह का नाम हिंदी में प्राप्त करें (उदा: अक्‍तूबर)
+CURRENT_MONTH_HINDI = datetime.now().strftime("%B").title() 
+CURRENT_YEAR = datetime.now().year
+
+# --- स्थायी आधिकारिक नोट टेम्प्लेट ---
+
+OFFICIAL_NOTE_BASE = f"""प0म0रे0 															कार्यालय
+सरईग्रा/स्‍टॉफ - IV/TA													     वरिष्‍ठ खण्‍ड अभियंता (रेल पथ)
+दिनांक/{CURRENT_DATE_FORMATTED}														सरईग्राम
+
+प्रति,
+	वरिष्‍ठ मण्‍डल (वित्त प्रबंधक) 
+	पमरे जबलपुर
+
+द्वारा :- 	उचित माध्‍यम 
+"""
+
+OFFICIAL_NOTE_BODY_TEMPLATE = f"""उपरोक्‍त विषयानुसार इस डिपो के अधीन पदस्‍थ कर्मचारियों का माह {CURRENT_MONTH_HINDI} {CURRENT_YEAR} के वेतन पत्रक में लगने वाला यात्रा भत्ता की सूची कर्मचारीवार निम्‍नानुसार तैयार कर प्रतिहस्‍ताक्षर एवं भुगतान की अग्रिम कार्यवाही हेतु 
+यात्रा भत्ता संलग्‍न सादर प्रेषित है ।
+"""
+
 
 def check_password():
     """Returns True if the user enters the correct password."""
@@ -21,7 +59,7 @@ def check_password():
     password = st.text_input(
         "पासवर्ड डालें", type="password", 
         key="password_input", 
-        placeholder=""
+        placeholder="sgam@4321"
     )
 
     if st.button("लॉगिन"):
@@ -34,14 +72,55 @@ def check_password():
     
     return False
 
-# --- मुख्य फ़िल्टरिंग लॉजिक फ़ंक्शन ---
+# --- सहायक कार्य (पिछले सुधारों के साथ) ---
 
-def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, data_string, filter_type):
+def get_data_section(data_string):
     """
-    फ़िल्टर किए गए रिकॉर्ड से आउटपुट टेक्स्ट फ़ाइल बनाता है।
-    filter_type: 'above' or 'upto'
+    अपलोड की गई फ़ाइल से केवल डेटा तालिका अनुभाग को निकालता है।
     """
     lines = data_string.split('\n')
+    data_section = []
+    
+    start_pattern = "______________________________________________________________________________________________________________________________________________"
+    end_pattern = "Total :"
+    
+    start_index = -1
+    end_index = -1
+    
+    try:
+        start_index = lines.index(start_pattern)
+        for i in range(start_index + 1, len(lines)):
+            if lines[i].strip().startswith(end_pattern):
+                end_index = i
+                break
+        
+        if start_index != -1 and end_index != -1:
+            data_section = lines[start_index:end_index]
+            
+    except ValueError:
+        return []
+
+    return data_section
+
+def get_claim_month_from_data(data_string):
+    """फ़ाइल से क्लेम महीना (जैसे: Jul25) निकालता है।"""
+    month_match = re.search(r'(Jul25|Aug25|Sep25|May25|Jun25)', data_string)
+    return month_match.group(1) if month_match else "Data"
+
+
+def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, data_string, filter_type, claim_month):
+    """
+    फ़िल्टर किए गए रिकॉर्ड से आउटपुट टेक्स्ट फ़ाइल बनाता है, जिसमें स्थायी नोट और फिक्स्ड हेडर शामिल होते हैं।
+    """
+    global OFFICIAL_NOTE_BASE, OFFICIAL_NOTE_BODY_TEMPLATE
+    
+    # विषय को फ़िल्टर प्रकार के आधार पर सेट करें
+    if filter_type == 'upto':
+        subject_line = "विषय:- 	माह सितम्‍बर की वेतन में लगने वाला 15 दिवस तक के यात्रा भत्ता पर प्रतिहस्‍ताक्षर एवं भुगतान की कार्यवाही बावत ।"
+    else:
+        subject_line = "विषय:- 	माह सितम्‍बर की वेतन में लगने वाला 15 दिवस से अधिक के यात्रा भत्ता पर प्रतिहस्‍ताक्षर एवं भुगतान की कार्यवाही बावत ।"
+        
+    final_official_note = OFFICIAL_NOTE_BASE + subject_line + "\n" + OFFICIAL_NOTE_BODY_TEMPLATE
     
     # शब्दों में राशि के लिए फ़ंक्शन
     def number_to_word(number):
@@ -49,7 +128,7 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, d
             import num2words
             return num2words.num2words(number, lang='en').title()
         except ImportError:
-            return f"Rupees {number} in Words (Please install 'num2words' for correct text)"
+            return f"Rupees {number} in Words"
 
     if not filtered_records:
         if filter_type == 'above':
@@ -59,18 +138,15 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, d
 
     output_text_lines = []
     
-    # मूल हेडर लाइनों को बनाए रखें (फ़ाइल के सबसे ऊपर से शुरू)
-    header_lines_end_index = 0
-    try:
-        header_lines_end_index = lines.index("_______________________________________________________________________________________________________________________________________________")
-    except ValueError:
-        header_lines_end_index = 5 
-        
-    for i in range(header_lines_end_index + 1):
-        output_text_lines.append(lines[i].strip())
+    # --- 1. स्थायी आधिकारिक नोट और सामान्य हेडर जोड़ें ---
     
-    # 'SNO' वाली लाइन और उसके बाद की लाइनों को हेडर के रूप में फिर से डालें
+    output_text_lines.append(final_official_note)
+    
+    # सामान्य हेडर लाइनों को जोड़ें
     output_text_lines.extend([
+        "WEST CENTRAL RAILWAY/ JABALPUR DIVISION                         PAGE NO:1",
+        "PRINT DATE:   ",
+        f"TA/ CONTINGENCY STATEMENT OF THE STAFF OF B.U No. 3602255    FROM PERIOD:202409    TO PERIOD:202508",
         "______________________________________________________________________________________________________________________________________________",
         "SNO    EMP NO          NAME           DESIG     GP/    MONTH           20% TA        30% TA   	      70% TA  	        100% TA  TOTAL  CONT        ",
         "                                     	        LEVEL  CLAIM           Amount        Amount   	      Amount   	         Amount  AMOUNT  AMT",
@@ -78,16 +154,17 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, d
         "_______________________________________________________________________________________________________________________________________________"
     ])
     
-    # प्रत्येक फ़िल्टर किए गए रिकॉर्ड को नए SNO के साथ जोड़ें
+    # --- 2. फ़िल्टर किए गए रिकॉर्ड जोड़ें ---
     for i, item in enumerate(filtered_records):
         new_sno = i + 1
-        original_sno_pattern = r'^\s*' + re.escape(item['original_sno']) + r'\s+'
-        # पुरानी SNO को नई SNO से बदलें (फिक्स्ड-चौड़ाई का ध्यान रखते हुए)
-        new_record_line = re.sub(original_sno_pattern, f" {new_sno:<4} ", item['record_line'])
+        original_sno_pattern = r'^\s*(\d{1,4})\s+'
+        
+        # SNO को नए क्रम संख्या से बदलें
+        new_record_line = re.sub(original_sno_pattern, f" {new_sno:<4} ", item['record_line'], 1)
         output_text_lines.append(new_record_line)
         output_text_lines.append("__________________________________________________________________________________________________________________________________________")
 
-    # अंत में टोटल और Rs. in Word जोड़ें
+    # --- 3. अंत में टोटल और Rs. in Word जोड़ें ---
     total_section = f"""
 __________________________________________________________________________________________________________________________________________
 							Total :                                                             {total_ta_amount_sum}      0
@@ -102,7 +179,7 @@ ________________________________________________________________________________
 
 CLAIM MONTH		TA		CONTIGENT	TOTALAMT    RECORD COUNT
 _____________________________________________________________________________
-   202508            {total_ta_amount_sum}                  0         {total_ta_amount_sum}          {total_emp_count}
+   202507            {total_ta_amount_sum}                  0         {total_ta_amount_sum}          {total_emp_count}
 _____________________________________________________________________________
          TOTAL AMT   {total_ta_amount_sum}                  0         {total_ta_amount_sum}          {total_emp_count}
 
@@ -125,46 +202,37 @@ THE BILL WAS NOT DRAWN PREVIOUSLY AND WILL NOT BE DRAWN IN FUTURE
 
     return "\n".join(output_text_lines)
 
-def process_ta_data(data_string):
+def process_ta_data(data_string, claim_month):
     """
     सभी रिकॉर्ड को पार्स करता है और उन्हें 15 दिन तक और 15 दिन से अधिक के लिए अलग करता है।
     """
-    lines = data_string.split('\n')
+    data_section = get_data_section(data_string)
     records = []
     current_record = ""
-    data_section_started = False
-    
-    for line in lines:
+
+    # डेटा सेक्शन से रिकॉर्ड निकालें
+    for line in data_section:
         line = line.strip()
-        
-        if "_______________________________________________________________________________________________________________________________________________" in line:
-            data_section_started = True
+        if re.match(r'^\s*(\d{1,4})\s+', line):
+            if current_record:
+                records.append(current_record.strip())
+            current_record = line
+        elif "________________" in line:
+            if current_record:
+                records.append(current_record.strip())
+            current_record = ""
             continue
-        
-        if "Total :" in line:
-            break
+        elif current_record:
+            current_record += " " + line
             
-        if data_section_started:
-            if re.match(r'^\s*(\d{1,4})\s+', line):
-                if current_record:
-                    records.append(current_record.strip())
-                current_record = line
-            elif "________________" in line:
-                if current_record:
-                    records.append(current_record.strip())
-                current_record = ""
-                continue
-            elif current_record:
-                current_record += " " + line
-                
     if current_record:
         records.append(current_record.strip())
 
-    # दो फ़िल्टर की गई सूचियाँ
     above_15_days_records = []
     upto_15_days_records = []
     
     for record in records:
+        # TA days: (days)*amount=total_amount
         days_matches = re.findall(r'(\d+)\*[0-9\.]+\s*=\s*(\d+)', record)
         
         if len(days_matches) == 4:
@@ -193,14 +261,11 @@ def process_ta_data(data_string):
                 upto_15_days_records.append(record_data)
 
     # आउटपुट टेक्स्ट तैयार करें
-    
-    # 15 दिन से अधिक के लिए आउटपुट
     total_above_amount = sum(item['total_ta_amount'] for item in above_15_days_records)
-    above_15_output = create_output_text(above_15_days_records, total_above_amount, len(above_15_days_records), data_string, 'above')
+    above_15_output = create_output_text(above_15_days_records, total_above_amount, len(above_15_days_records), data_string, 'above', claim_month)
     
-    # 15 दिन तक के लिए आउटपुट
     total_upto_amount = sum(item['total_ta_amount'] for item in upto_15_days_records)
-    upto_15_output = create_output_text(upto_15_days_records, total_upto_amount, len(upto_15_days_records), data_string, 'upto')
+    upto_15_output = create_output_text(upto_15_days_records, total_upto_amount, len(upto_15_days_records), data_string, 'upto', claim_month)
     
     return above_15_output, upto_15_output
 
@@ -220,13 +285,16 @@ def main_app():
         file_bytes = uploaded_file.read()
         data_string = file_bytes.decode("utf-8")
 
+        # क्लेम महीना निकालें
+        claim_month = get_claim_month_from_data(data_string)
+        
         st.subheader("2. फ़िल्टर किया गया डेटा")
         
         # दोनों सूचियों को प्रोसेस करें
-        above_15_output, upto_15_output = process_ta_data(data_string)
+        above_15_output, upto_15_output = process_ta_data(data_string, claim_month)
 
         # --- 15 दिन से अधिक का सेक्शन ---
-        st.markdown("### 15 दिन से अधिक TA वाले कर्मचारी")
+        st.markdown(f"### ➡️ {claim_month} **15 दिन से अधिक** TA वाले कर्मचारी")
         if above_15_output.startswith("फ़ाइल में"):
             st.warning(above_15_output)
         else:
@@ -235,16 +303,16 @@ def main_app():
             st.code(above_15_output, language='text')
 
             st.download_button(
-                label="📁 **15 दिन से अधिक** की TXT फ़ाइल डाउनलोड करें",
+                label=f"📁 {claim_month}_**Above_15_Days**.txt डाउनलोड करें",
                 data=above_15_output.encode("utf-8"),
-                file_name="TA_Above_15_Days_Filtered.txt",
+                file_name=f"{claim_month}_Above_15_Days.txt",
                 mime="text/plain"
             )
 
         st.markdown("---")
 
         # --- 15 दिन तक का सेक्शन ---
-        st.markdown("### 15 दिन तक TA वाले कर्मचारी")
+        st.markdown(f"### ⬅️ {claim_month} **15 दिन तक** TA वाले कर्मचारी")
         if upto_15_output.startswith("फ़ाइल में"):
             st.warning(upto_15_output)
         else:
@@ -253,9 +321,9 @@ def main_app():
             st.code(upto_15_output, language='text')
 
             st.download_button(
-                label="📁 **15 दिन तक** की TXT फ़ाइल डाउनलोड करें",
+                label=f"📁 {claim_month}_**Upto_15_Days**.txt डाउनलोड करें",
                 data=upto_15_output.encode("utf-8"),
-                file_name="TA_Upto_15_Days_Filtered.txt",
+                file_name=f"{claim_month}_Upto_15_Days.txt",
                 mime="text/plain"
             )
 
