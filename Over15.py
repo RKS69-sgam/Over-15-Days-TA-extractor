@@ -26,11 +26,13 @@ except:
 # --- सहायक कार्य (Helper Functions) ---
 
 def get_current_time_details():
-    """वर्तमान तिथि, माह और वर्ष को हिंदी प्रारूप में प्राप्त करता है।"""
-    current_date = datetime.now().strftime("%d.%m.%Y")
-    current_month_hindi = datetime.now().strftime("%B").title() 
-    current_year = datetime.now().year
-    return current_date, current_month_hindi, current_year
+    """वर्तमान तिथि, माह और वर्ष को हिंदी और अंग्रेजी प्रारूप में प्राप्त करता है।"""
+    now = datetime.now()
+    current_date = now.strftime("%d.%m.%Y")
+    current_month_hindi = now.strftime("%B").title() 
+    current_year = now.year
+    current_month_numeric = now.strftime("%Y%m") # जैसे: '202606'
+    return current_date, current_month_hindi, current_year, current_month_numeric
 
 
 def check_password():
@@ -86,7 +88,6 @@ def get_data_section(data_string):
 
 def extract_month_from_record(record_line):
     """रिकॉर्ड लाइन से क्लेम महीना (जैसे: Jul25, Aug25) ढूंढता है।"""
-    # सामान्य महीनों और वर्ष के प्रारूप को खोजने के लिए Regex
     match = re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{2}\b', record_line, re.IGNORECASE)
     if match:
         return match.group(0).title()
@@ -103,8 +104,8 @@ def number_to_word(number):
 
 
 def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, filter_type, claim_month):
-    """फ़िल्टर किए गए रिकॉर्ड से आउटपुट टेक्स्ट फ़ाइल बनाता है, जिसमें विशिष्ट महीना शामिल होता है।"""
-    current_date, current_month_hindi, current_year = get_current_time_details()
+    """फ़िल्टर किए गए रिकॉर्ड से आउटपुट टेक्स्ट फ़ाइल बनाता है, जिसमें वर्तमान महीना शामिल होता है।"""
+    current_date, current_month_hindi, current_year, current_month_numeric = get_current_time_details()
 
     if not filtered_records:
         return ""
@@ -121,8 +122,8 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, f
 द्वारा :-	उचित माध्‍यम 
 """
     
-    # क्लेम महीने को दिखाने के लिए विषय पंक्ति को कस्टमाइज़ करें
-    month_year_text = f"माह {claim_month}"
+    # क्लेम महीने के बजाय हमेशा वर्तमान महीना और वर्ष (Current Month & Year) का ही उपयोग करें
+    month_year_text = f"माह {current_month_hindi} {current_year}"
     if filter_type == 'upto':
         subject_detail = "15 दिवस तक के यात्रा भत्ता"
     else:
@@ -130,8 +131,7 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, f
         
     subject_line = f"विषय:- 	{month_year_text} की वेतन में लगने वाला {subject_detail} पर प्रतिहस्‍ताक्षर एवं भुगतान की कार्यवाही बावत ।"
     
-    body_text = f"माह {claim_month}"
-    official_note_body = f"""      उपरोक्‍त विषयानुसार इस डिपो के अधीन पदस्‍थ कर्मचारियों का {body_text} के वेतन पत्रक में लगने वाला यात्रा भत्ता की सूची कर्मचारीवार निम्‍नानुसार तैयार कर प्रतिहस्‍ताक्षर एवं भुगतान की अग्रिम कार्यवाही हेतु 
+    official_note_body = f"""      उपरोक्‍त विषयानुसार इस डिपो के अधीन पदस्‍थ कर्मचारियों का {month_year_text} के वेतन पत्रक में लगने वाला यात्रा भत्ता की सूची कर्मचारीवार निम्‍नानुसार तैयार कर प्रतिहस्‍ताक्षर एवं भुगतान की अग्रिम कार्यवाही हेतु 
 यात्रा भत्ता संलग्‍न सादर प्रेषित है ।
 """
     
@@ -161,6 +161,7 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, f
         output_text_lines.append("__________________________________________________________________________________________________________________________________________")
 
     # --- 4. अंत में टोटल और Rs. in Word जोड़ें ---
+    # CLAIM MONTH तालिका स्तंभ में अब हमेशा वर्त्तमान महीना numeric फॉर्मेट (जैसे '202606') में प्रिंट होगा
     total_section = f"""
 __________________________________________________________________________________________________________________________________________
 							Total :                                                             {total_ta_amount_sum}      0
@@ -175,7 +176,7 @@ ________________________________________________________________________________
 
 CLAIM MONTH		TA		CONTIGENT	TOTALAMT    RECORD COUNT
 _____________________________________________________________________________
-   {claim_month:<17} {total_ta_amount_sum:<23} 0         {total_ta_amount_sum:<14} {total_emp_count}
+   {current_month_numeric:<17} {total_ta_amount_sum:<23} 0         {total_ta_amount_sum:<14} {total_emp_count}
 _____________________________________________________________________________
          TOTAL AMT   {total_ta_amount_sum:<23} 0         {total_ta_amount_sum:<14} {total_emp_count}
 
@@ -249,7 +250,6 @@ def process_ta_data(data_string):
             }
 
             if total_days > 15:
-                # रिकॉर्ड से क्लेम महीना निकालें
                 rec_month = extract_month_from_record(record)
                 if rec_month not in above_15_by_month:
                     above_15_by_month[rec_month] = []
@@ -303,7 +303,6 @@ def main_app():
             st.warning("फ़ाइल में 15 दिन से अधिक TA वाले कोई कर्मचारी नहीं पाए गए।")
         else:
             for month, output_text in above_15_outputs.items():
-                # कुल कर्मचारियों की संख्या प्राप्त करें
                 emp_count_match = re.search(r'TOTAL AMT\s+[\d\s]+(\d+)', output_text)
                 record_count = int(emp_count_match.group(1)) if emp_count_match else 0
                 
@@ -322,7 +321,7 @@ def main_app():
         st.markdown("---")
 
         # --- 15 दिन तक का सेक्शन ---
-        st.markdown("### ⬅️ **15 दिन तक** TA वाले कर्मचारी (एकत्रित)")
+        st.markdown("### ⬅️ **15 दिन तक** TA वाले कर्मचारी")
         if not upto_15_output or upto_15_output.strip() == "":
             st.warning("फ़ाइल में 15 दिन तक TA वाले कोई कर्मचारी नहीं पाए गए।")
         else:
