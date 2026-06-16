@@ -5,31 +5,92 @@ from io import StringIO
 from datetime import datetime
 import locale
 
-# सिस्टम की लोकल सेटिंग को हिंदी/भारतीय प्रारूप पर सेट करने का प्रयास करें
-try:
-    # macOS/Linux: Use 'hi_IN.UTF-8' for Hindi month names
-    locale.setlocale(locale.LC_TIME, 'hi_IN.UTF-8')
-except locale.Error:
-    try:
-        # Windows/Fallback: Use 'en_IN.UTF-8' or similar
-        locale.setlocale(locale.LC_TIME, 'en_IN.UTF-8')
-    except locale.Error:
-        # Final fallback
-        locale.setlocale(locale.LC_TIME, 'C') 
-
 # --- पासवर्ड और कॉन्फ़िगरेशन ---
 try:
     CORRECT_PASSWORD = st.secrets["app_password"]
 except:
     CORRECT_PASSWORD = "sgam@4321"
 
+# --- हिन्दी महीनों का डिक्शनरी (लोकल सेटिंग फेल होने की स्थिति के लिए बैकअप) ---
+HINDI_MONTHS = {
+    1: "जनवरी", 2: "फ़रवरी", 3: "मार्च", 4: "अप्रैल", 5: "मई", 6: "जून",
+    7: "जुलाई", 8: "अगस्त", 9: "सितंबर", 10: "अक्टूबर", 11: "नवंबर", 12: "दिसंबर"
+}
+
 # --- सहायक कार्य (Helper Functions) ---
+
+def number_to_words_indian(num):
+    """संख्या को भारतीय मुद्रा प्रणाली के अनुसार अंग्रेजी शब्दों में बदलता है। (उदा: Rupees Two Thousand Five Hundred Only)"""
+    try:
+        num = int(num)
+    except (ValueError, TypeError):
+        return "Zero"
+
+    if num == 0:
+        return "Rupees Zero Only"
+
+    def convert_chunk(n):
+        units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", 
+                 "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+        tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+        
+        words = []
+        if n >= 100:
+            words.append(units[n // 100] + " Hundred")
+            n %= 100
+        if n >= 20:
+            words.append(tens[n // 10])
+            n %= 10
+        if n > 0:
+            words.append(units[n])
+        return " ".join(words).strip()
+
+    parts = []
+    
+    # Crores (1,00,00,000)
+    if num >= 10000000:
+        crores = num // 10000000
+        parts.append(convert_chunk(crores) + " Crore")
+        num %= 10000000
+        
+    # Lakhs (100,000)
+    if num >= 100000:
+        lakhs = num // 100000
+        parts.append(convert_chunk(lakhs) + " Lakh")
+        num %= 100000
+        
+    # Thousands (1,000)
+    if num >= 1000:
+        thousands = num // 1000
+        parts.append(convert_chunk(thousands) + " Thousand")
+        num %= 1000
+        
+    # Remaining hundreds/tens/units
+    if num > 0:
+        parts.append(convert_chunk(num))
+
+    ans = " ".join(parts).strip()
+    return f"Rupees {ans} Only"
+
 
 def get_current_time_details():
     """वर्तमान तिथि, माह और वर्ष को हिंदी और अंग्रेजी प्रारूप में प्राप्त करता है।"""
     now = datetime.now()
     current_date = now.strftime("%d.%m.%Y")
-    current_month_hindi = now.strftime("%B").title() 
+    
+    # सबसे पहले लोकल सेटिंग के माध्यम से नाम प्राप्त करने का प्रयास करें
+    try:
+        # macOS/Linux/Windows अनुकूलित सेटअप
+        locale.setlocale(locale.LC_TIME, 'hi_IN.UTF-8')
+        current_month_hindi = now.strftime("%B").title()
+    except Exception:
+        try:
+            locale.setlocale(locale.LC_TIME, 'hi_IN')
+            current_month_hindi = now.strftime("%B").title()
+        except Exception:
+            # यदि लोकल सेटिंग पूरी तरह फेल हो जाए, तो हमारे डिक्शनरी मैप का उपयोग करें
+            current_month_hindi = HINDI_MONTHS.get(now.month, now.strftime("%B"))
+
     current_year = now.year
     current_month_numeric = now.strftime("%Y%m") # जैसे: '202606'
     return current_date, current_month_hindi, current_year, current_month_numeric
@@ -40,24 +101,34 @@ def check_password():
     if st.session_state.get("password_correct", False):
         return True
 
-    st.header("लॉगिन आवश्यक है")
-    st.markdown("---")
+    # बेहतर यूज़र इंटरफेस स्टाइलिंग
+    st.markdown("""
+        <div style="background-color:#1e293b; padding: 20px; border-radius: 10px; margin-bottom: 25px; text-align: center;">
+            <h2 style="color:#f8fafc; margin:0;">वरिष्ठ खंड अभियंता (रेल पथ) - सरईग्राम</h2>
+            <p style="color:#cbd5e1; margin-top: 5px; font-size:14px;">यात्रा भत्ता (TA) पृथक्करण एवं प्रबंधन प्रणाली</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.subheader("🔑 लॉगिन आवश्यक है")
+    st.write("सॉफ्टवेयर का उपयोग करने के लिए कृपया प्राधिकृत पासवर्ड दर्ज करें।")
 
     password = st.text_input(
         "पासवर्ड डालें", type="password", 
         key="password_input", 
-        placeholder=""
+        placeholder="यहाँ पासवर्ड लिखें"
     )
 
-    if st.button("लॉगिन"):
+    if st.button("लॉगिन करें", use_container_width=True):
         if password == CORRECT_PASSWORD:
             st.session_state["password_correct"] = True
+            st.success("सफलतापूर्वक लॉगिन हो गया!")
             st.rerun()
         else:
-            st.error("पासवर्ड गलत है। कृपया पुनः प्रयास करें।")
+            st.error("पासवर्ड गलत है! कृपया पुनः सही पासवर्ड का प्रयास करें।")
             st.session_state["password_correct"] = False
     
     return False
+
 
 def get_data_section(data_string):
     """अपलोड की गई फ़ाइल से केवल डेटा तालिका अनुभाग को निकालता है।"""
@@ -71,11 +142,17 @@ def get_data_section(data_string):
     end_index = -1
     
     try:
-        start_index = lines.index(start_pattern)
-        for i in range(start_index + 1, len(lines)):
-            if lines[i].strip().startswith(end_pattern):
-                end_index = i
+        # पहली बार मिलने वाली मुख्य डेकोरेटिव लाइन को खोजें
+        for idx, line in enumerate(lines):
+            if start_pattern in line:
+                start_index = idx
                 break
+                
+        if start_index != -1:
+            for i in range(start_index + 1, len(lines)):
+                if lines[i].strip().startswith(end_pattern):
+                    end_index = i
+                    break
         
         if start_index != -1 and end_index != -1:
             data_section = lines[start_index:end_index] 
@@ -94,13 +171,19 @@ def extract_month_from_record(record_line):
     return "Unknown_Month"
 
 
-def number_to_word(number):
-    """संख्या को शब्दों में बदलने का कार्य।"""
-    try:
-        import num2words
-        return num2words.num2words(number, lang='en').title()
-    except ImportError:
-        return f"Rupees {number} in Words"
+def claim_month_to_numeric(month_str):
+    """'Jul25' जैसे प्रारूप को '202507' जैसे संख्यात्मक प्रारूप में बदलता है।"""
+    match = re.match(r'([A-Za-z]{3})(\d{2})', month_str)
+    if match:
+        mon_name, year_short = match.groups()
+        months_map = {
+            "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05", "Jun": "06",
+            "Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"
+        }
+        mon_num = months_map.get(mon_name.title(), "01")
+        year_long = "20" + year_short
+        return f"{year_long}{mon_num}"
+    return "Unknown"
 
 
 def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, filter_type, claim_month):
@@ -122,12 +205,12 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, f
 द्वारा :-	उचित माध्‍यम 
 """
     
-    # क्लेम महीने के बजाय हमेशा वर्तमान महीना और वर्ष (Current Month & Year) का ही उपयोग करें
+    # क्लेम महीने के बजाय हमेशा वर्तमान महीना और वर्ष का उपयोग
     month_year_text = f"माह {current_month_hindi} {current_year}"
     if filter_type == 'upto':
         subject_detail = "15 दिवस तक के यात्रा भत्ता"
     else:
-        subject_detail = "15 दिवस से अधिक के यात्रा भत्ता"
+        subject_detail = f"15 दिवस से अधिक के यात्रा भत्ता ({claim_month})"
         
     subject_line = f"विषय:- 	{month_year_text} की वेतन में लगने वाला {subject_detail} पर प्रतिहस्‍ताक्षर एवं भुगतान की कार्यवाही बावत ।"
     
@@ -160,8 +243,38 @@ def create_output_text(filtered_records, total_ta_amount_sum, total_emp_count, f
         output_text_lines.append(new_record_line)
         output_text_lines.append("__________________________________________________________________________________________________________________________________________")
 
+    # --- क्लेम महीना वार सारांश तालिका का निर्माण ---
+    month_summary = {}
+    for item in filtered_records:
+        m_str = item.get('claim_month', 'Unknown_Month')
+        m_numeric = claim_month_to_numeric(m_str)
+        if m_numeric == "Unknown":
+            m_numeric = current_month_numeric
+            
+        amount = item.get('total_ta_amount', 0)
+        
+        if m_numeric not in month_summary:
+            month_summary[m_numeric] = {
+                'ta': 0,
+                'contingent': 0,
+                'total': 0,
+                'count': 0
+            }
+        month_summary[m_numeric]['ta'] += amount
+        month_summary[m_numeric]['total'] += amount
+        month_summary[m_numeric]['count'] += 1
+
+    summary_rows = []
+    for m_num in sorted(month_summary.keys()):
+        stats = month_summary[m_num]
+        summary_rows.append(
+            f"   {m_num:<17} {stats['ta']:<23} 0         {stats['total']:<14} {stats['count']}"
+        )
+    summary_table_text = "\n".join(summary_rows)
+
     # --- 4. अंत में टोटल और Rs. in Word जोड़ें ---
-    # CLAIM MONTH तालिका स्तंभ में अब हमेशा वर्त्तमान महीना numeric फॉर्मेट (जैसे '202606') में प्रिंट होगा
+    words_representation = number_to_words_indian(total_ta_amount_sum)
+    
     total_section = f"""
 __________________________________________________________________________________________________________________________________________
 							Total :                                                             {total_ta_amount_sum}      0
@@ -176,12 +289,12 @@ ________________________________________________________________________________
 
 CLAIM MONTH		TA		CONTIGENT	TOTALAMT    RECORD COUNT
 _____________________________________________________________________________
-   {current_month_numeric:<17} {total_ta_amount_sum:<23} 0         {total_ta_amount_sum:<14} {total_emp_count}
+{summary_table_text}
 _____________________________________________________________________________
          TOTAL AMT   {total_ta_amount_sum:<23} 0         {total_ta_amount_sum:<14} {total_emp_count}
 
 FORWARDED  IN DUPLICATE FOR VETTING OF Rs.{total_ta_amount_sum}
-( Rs.{number_to_word(total_ta_amount_sum)} Only ) ONLY
+( {words_representation} )
 & RETURN TO THIS OFFICE
 FOR DRAWL IN THE REGULAR SALARY BILL.
 THE BILL WAS NOT DRAWN PREVIOUSLY AND WILL NOT BE DRAWN IN FUTURE
@@ -207,12 +320,13 @@ def process_ta_data(data_string):
 
     # डेटा सेक्शन से रिकॉर्ड निकालें
     for line in data_section:
-        line = line.strip()
+        line_stripped = line.strip()
+        # यदि नई सीरियल संख्या से शुरुआत हो रही है
         if re.match(r'^\s*(\d{1,4})\s+', line):
             if current_record:
                 records.append(current_record.strip())
             current_record = line
-        elif "________________" in line:
+        elif "________________" in line_stripped:
             if current_record:
                 records.append(current_record.strip())
             current_record = ""
@@ -227,6 +341,7 @@ def process_ta_data(data_string):
     upto_15_days_records = []
     
     for record in records:
+        # दिनों के पैटर्न का मिलान (उदा: 5*150.00 = 750, या 10*500 = 5000)
         days_matches = re.findall(r'(\d+)\*[0-9\.]+\s*=\s*(\d+)', record)
         
         if len(days_matches) == 4:
@@ -243,21 +358,23 @@ def process_ta_data(data_string):
             sno_match = re.match(r'^\s*(\d{1,4})\s+', record)
             original_sno = sno_match.group(1).strip() if sno_match else "0"
 
+            rec_month = extract_month_from_record(record)
+
             record_data = {
                 'original_sno': original_sno,
                 'record_line': record,
-                'total_ta_amount': total_ta_amount
+                'total_ta_amount': total_ta_amount,
+                'claim_month': rec_month
             }
 
             if total_days > 15:
-                rec_month = extract_month_from_record(record)
                 if rec_month not in above_15_by_month:
                     above_15_by_month[rec_month] = []
                 above_15_by_month[rec_month].append(record_data)
             else:
                 upto_15_days_records.append(record_data)
 
-    # 15 दिन से अधिक वाले रिकॉर्ड्स के लिए महीना-वार आउटपुट फाइलें जनरेट करें
+    # 15 दिन से अधिक वाले रिकॉर्ड्स के लिए महीना-वार आउटपुट फाइलें
     above_15_outputs = {}
     for month, m_records in above_15_by_month.items():
         total_m_amount = sum(item['total_ta_amount'] for item in m_records)
@@ -265,9 +382,8 @@ def process_ta_data(data_string):
             m_records, total_m_amount, len(m_records), 'above', month
         )
     
-    # 15 दिन तक वाले रिकॉर्ड्स के लिए (इसे एक ही फाइल में रखा गया है)
+    # 15 दिन तक वाले रिकॉर्ड्स के लिए
     total_upto_amount = sum(item['total_ta_amount'] for item in upto_15_days_records)
-    # 15 दिन तक वाली फाइल के लिए एक सामान्य नामकरण रखें
     upto_15_output = create_output_text(
         upto_15_days_records, total_upto_amount, len(upto_15_days_records), 'upto', 'Combined_Period'
     )
@@ -278,66 +394,89 @@ def process_ta_data(data_string):
 # --- Streamlit App Interface ---
 
 def main_app():
-    st.set_page_config(page_title="TA 15 Days Monthwise Filter", layout="centered")
+    st.set_page_config(page_title="TA 15 Days Filter Tool", layout="wide", page_icon="🚄")
 
-    st.title("यात्रा भत्ता (TA) फ़िल्टर: 15 दिन तक और 15 दिन से अधिक")
-    st.subheader("(15 दिन से अधिक वाले कर्मचारियों की माह-वार फाइलें)")
+    st.title("🚄 यात्रा भत्ता (TA) पृथक्करण एवं फ़िल्टर प्रणाली")
+    st.markdown("""
+    यह टूल रेलवे यात्रा भत्ता सूचियों (TA Sheets) को स्वचालित रूप से विश्लेषित करता है तथा:
+    - **15 दिनों से अधिक** यात्रा करने वाले कर्मचारियों को उनके दावे के **महीने के अनुसार** अलग फाइलों में विभाजित करता है।
+    - **15 दिनों तक** यात्रा करने वाले सभी कर्मचारियों की एक संयुक्त फ़ाइल तैयार करता है।
+    """)
     st.markdown("---")
 
-    st.subheader("1. TXT फ़ाइल अपलोड करें")
-    uploaded_file = st.file_uploader("कृपया अपनी TA सूची वाली TXT फ़ाइल अपलोड करें।", type="txt")
+    # सूचना बोर्ड
+    current_date, current_month_hindi, current_year, _ = get_current_time_details()
+    st.info(f"📅 **वर्त्तमान बिलिंग विवरण:** तैयार करने की तिथि: **{current_date}** | आवेदन पत्र माह: **{current_month_hindi} {current_year}**")
+
+    st.subheader("📁 1. TXT फ़ाइल अपलोड करें")
+    uploaded_file = st.file_uploader("कृपया अपनी रेलवे TA सूची वाली TXT फ़ाइल यहाँ ड्रैग या ब्राउज करें:", type="txt")
 
     if uploaded_file is not None:
-        file_bytes = uploaded_file.read()
-        data_string = file_bytes.decode("utf-8")
+        try:
+            file_bytes = uploaded_file.read()
+            data_string = file_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                data_string = file_bytes.decode("latin-1")
+            except Exception as e:
+                st.error("फ़ाइल को पढ़ने में त्रुटि हुई। कृपया सुनिश्चित करें कि यह एक मानक टेक्स्ट फ़ाइल (.txt) है।")
+                return
         
-        st.subheader("2. फ़िल्टर किया गया डेटा")
+        st.subheader("⚙️ 2. फ़िल्टर और पृथक्करण के परिणाम")
         
-        # दोनों सूचियों को प्रोसेस करें
+        # प्रसंस्करण शुरू करें
         above_15_outputs, upto_15_output = process_ta_data(data_string)
 
-        # --- 15 दिन से अधिक का सेक्शन (महीना-वार) ---
-        st.markdown("### ➡️ **15 दिन से अधिक** TA वाले कर्मचारी (महीने के अनुसार विभाजित)")
-        
-        if not above_15_outputs:
-            st.warning("फ़ाइल में 15 दिन से अधिक TA वाले कोई कर्मचारी नहीं पाए गए।")
-        else:
-            for month, output_text in above_15_outputs.items():
-                emp_count_match = re.search(r'TOTAL AMT\s+[\d\s]+(\d+)', output_text)
+        col1, col2 = st.columns(2)
+
+        # --- बायां कॉलम: 15 दिन से अधिक का सेक्शन (महीना-वार) ---
+        with col1:
+            st.markdown("### 🔴 **15 दिन से अधिक** वाले कर्मचारी")
+            st.caption("इन कर्मचारियों के दावे को उनके संबंधित महीनों (जैसे Jul25, Aug25) के अनुसार विभाजित किया गया है।")
+            
+            if not above_15_outputs:
+                st.warning("फ़ाइल में 15 दिन से अधिक यात्रा भत्ता वाले कोई कर्मचारी नहीं मिले।")
+            else:
+                for month, output_text in above_15_outputs.items():
+                    emp_count_match = re.search(r'TOTAL AMT\s+[\d\s]+(\d+)', output_text)
+                    record_count = int(emp_count_match.group(1)) if emp_count_match else 0
+                    
+                    with st.expander(f"📅 माह: {month} (कुल कर्मचारी: {record_count})", expanded=True):
+                        st.success(f"माह **{month}** में कुल **{record_count}** कर्मचारी मिले।")
+                        st.code(output_text, language='text')
+
+                        st.download_button(
+                            label=f"📥 {month}_Above_15_Days.txt डाउनलोड करें",
+                            data=output_text.encode("utf-8"),
+                            file_name=f"{month}_Above_15_Days.txt",
+                            mime="text/plain",
+                            key=f"btn_above_{month}",
+                            use_container_width=True
+                        )
+
+        # --- दायां कॉलम: 15 दिन तक का सेक्शन ---
+        with col2:
+            st.markdown("### 🟢 **15 दिन तक** वाले कर्मचारी")
+            st.caption("15 दिन या उससे कम यात्रा भत्ता वाले सभी कर्मचारियों की संयुक्त विवरणी।")
+            
+            if not upto_15_output or upto_15_output.strip() == "":
+                st.warning("फ़ाइल में 15 दिन तक यात्रा भत्ता वाले कोई कर्मचारी नहीं मिले।")
+            else:
+                emp_count_match = re.search(r'TOTAL AMT\s+[\d\s]+(\d+)', upto_15_output)
                 record_count = int(emp_count_match.group(1)) if emp_count_match else 0
                 
-                with st.expander(f"📅 माह: **{month}** (कुल कर्मचारी: {record_count})"):
-                    st.success(f"माह **{month}** में कुल **{record_count}** कर्मचारी पाए गए।")
-                    st.code(output_text, language='text')
+                with st.expander(f"📅 संयुक्त सूची (कुल कर्मचारी: {record_count})", expanded=True):
+                    st.success(f"कुल **{record_count}** कर्मचारी मिले।")
+                    st.code(upto_15_output, language='text')
 
                     st.download_button(
-                        label=f"📁 {month}_Above_15_Days.txt डाउनलोड करें",
-                        data=output_text.encode("utf-8"),
-                        file_name=f"{month}_Above_15_Days.txt",
+                        label="📥 Upto_15_Days.txt डाउनलोड करें",
+                        data=upto_15_output.encode("utf-8"),
+                        file_name="Upto_15_Days.txt",
                         mime="text/plain",
-                        key=f"btn_above_{month}"
+                        key="btn_upto",
+                        use_container_width=True
                     )
-
-        st.markdown("---")
-
-        # --- 15 दिन तक का सेक्शन ---
-        st.markdown("### ⬅️ **15 दिन तक** TA वाले कर्मचारी")
-        if not upto_15_output or upto_15_output.strip() == "":
-            st.warning("फ़ाइल में 15 दिन तक TA वाले कोई कर्मचारी नहीं पाए गए।")
-        else:
-            emp_count_match = re.search(r'TOTAL AMT\s+[\d\s]+(\d+)', upto_15_output)
-            record_count = int(emp_count_match.group(1)) if emp_count_match else 0
-            
-            st.success(f"कुल **{record_count}** कर्मचारी (15 दिन तक TA) पाए गए।")
-            st.code(upto_15_output, language='text')
-
-            st.download_button(
-                label="📁 Upto_15_Days.txt डाउनलोड करें",
-                data=upto_15_output.encode("utf-8"),
-                file_name="Upto_15_Days.txt",
-                mime="text/plain",
-                key="btn_upto"
-            )
 
 if __name__ == "__main__":
     if check_password():
